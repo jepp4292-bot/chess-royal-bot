@@ -6,6 +6,8 @@ import logging
 import os
 import asyncio
 
+    # Forcer la mise à jour de Render v1.1
+
 # --- CONFIGURATION DE BASE ---
 # ✅ NOUVELLES LIGNES (à ajouter au début de ton fichier)
 import os
