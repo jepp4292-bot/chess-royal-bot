@@ -306,6 +306,7 @@ class Button(ui.Button):
             await interaction.response.edit_message(content=f"Sélection annulée. C'est toujours au tour de {next_player_mention}.", attachments=[new_image], view=view)
 
 class GameRequestView(ui.View):
+    message: discord.Message = None
     def __init__(self, initiator: discord.Member, opponent: discord.Member, cog: commands.Cog):
         super().__init__(timeout=60)  # Expire après 60 secondes
         self.initiator = initiator
@@ -348,6 +349,15 @@ class GameRequestView(ui.View):
 
         await interaction.response.edit_message(content=f"Défi refusé par {interaction.user.mention}.", view=None)
         self.stop()
+        
+    async def on_timeout(self) -> None:        
+        # On désactive tous les boutons        
+        for item in self.children:            
+            item.disabled = True                
+            # On modifie le message original pour indiquer que le défi a expiré        
+            # # On passe "view=self" pour que les boutons apparaissent grisés        
+        if self.message:            
+            await self.message.edit(content="**Ce défi a expiré.**", view=self)
 
 class ChessCog(commands.Cog):
     def __init__(self, bot: commands.Bot): self.bot = bot
@@ -370,7 +380,8 @@ class ChessCog(commands.Cog):
             return
 
         view = GameRequestView(initiator=interaction.user, opponent=adversaire, cog=self)
-        await interaction.followup.send(f"{adversaire.mention}, vous avez été défié par {interaction.user.mention} à une partie d'échecs Royal ! Acceptez-vous ?", view=view)
+        message = await interaction.followup.send(f"{adversaire.mention}, vous avez été défié par {interaction.user.mention} à une partie d'échecs Royal ! Acceptez-vous ?", view=view)
+        view.message = message
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ChessCog(bot))
