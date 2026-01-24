@@ -1,0 +1,10 @@
+# Fichiers de configuration locaux
+config.py
+.env
+
+# Dossier de l'environnement virtuel
+venv/
+
+# Fichiers cache de Python
+__pycache__/
+*.pyc
