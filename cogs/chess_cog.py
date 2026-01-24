@@ -230,7 +230,7 @@ class Button(ui.Button):
             possible_moves = [move.to_square for move in view.board.pseudo_legal_moves if move.from_square == square]
             if piece.piece_type == chess.PAWN:
                 direction = 8 if piece.color == chess.WHITE else -8
-                back_square = square + direction
+                back_square = square - direction
                 if 0 <= back_square < 64 and not view.board.piece_at(back_square):
                     if back_square not in possible_moves: possible_moves.append(back_square)
             if not possible_moves: await interaction.response.send_message("Cette pièce ne peut pas bouger.", ephemeral=True); return
