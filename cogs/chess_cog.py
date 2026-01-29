@@ -23,33 +23,70 @@ class GameView(ui.View):
         self.ability_piece_type: Optional[chess.PieceType] = None
         self.mind_control_target: Optional[int] = None
         self.create_selection_interface()
-
-    def create_selection_interface(self):
-        self.clear_items(); self.selected_square = None
-        self.ability_piece_type = None; self.mind_control_target = None
-        file_options = [discord.SelectOption(label=chr(ord('a') + i), value=str(i)) for i in range(8)]
-        self.add_item(Dropdown(placeholder="Colonne...", options=file_options, custom_id="file_select"))
-        rank_options = [discord.SelectOption(label=str(i + 1), value=str(i)) for i in range(8)]
-        self.add_item(Dropdown(placeholder="Rangée...", options=rank_options, custom_id="rank_select"))
-        self.add_item(Button(label="Sélectionner", style=discord.ButtonStyle.primary, custom_id="select_piece_btn"))
-        self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
-    def create_action_interface(self, square: int):
-        self.clear_items(); self.selected_square = square
+        
+        
+    # Dans la classe GameView
+    def create_action_and_destination_interface(self, square: int):
+        self.clear_items()
+        self.selected_square = square
         piece = self.board.piece_at(square)
-        self.add_item(Button(label="Se déplacer", style=discord.ButtonStyle.secondary, custom_id="show_moves_btn"))
+
+        # --- PARTIE 1 : Création du menu des destinations ---
+        possible_moves = [move.to_square for move in self.board.pseudo_legal_moves if move.from_square == square]
+        
+        # Logique spéciale pour le déplacement en arrière du pion
+        if piece.piece_type == chess.PAWN:
+            direction = 8 if piece.color == chess.WHITE else -8
+            back_square = square - direction
+            if 0 <= back_square < 64 and not self.board.piece_at(back_square):
+                if back_square not in possible_moves: possible_moves.append(back_square)
+
+        # On ajoute le menu déroulant seulement s'il y a des coups possibles
+        if possible_moves:
+            move_options = [discord.SelectOption(label=chess.square_name(sq), value=str(sq)) for sq in possible_moves]
+            self.add_item(Dropdown(placeholder="Choisissez une destination...", options=move_options, custom_id="destination_select"))
+
+        # --- PARTIE 2 : Ajout des boutons de capacité ---
         if piece.piece_type == chess.KING: self.add_item(Button(label="Balayage Royal 👑", style=discord.ButtonStyle.success, custom_id="royal_sweep_btn"))
         elif piece.piece_type == chess.KNIGHT: self.add_item(Button(label="Double Assaut ⚔️", style=discord.ButtonStyle.success, custom_id="double_assault_start_btn"))
         elif piece.piece_type == chess.BISHOP: self.add_item(Button(label="Téléportation ✨", style=discord.ButtonStyle.success, custom_id="teleport_start_btn"))
         elif piece.piece_type == chess.ROOK: self.add_item(Button(label="Équipe de secours 🛡️", style=discord.ButtonStyle.success, custom_id="rescue_team_start_btn"))
         elif piece.piece_type == chess.QUEEN: self.add_item(Button(label="Contrôle mental 🧠", style=discord.ButtonStyle.success, custom_id="mind_control_start_btn"))
-        self.add_item(Button(label="Annuler", style=discord.ButtonStyle.danger, row=2, custom_id="cancel_btn"))
+        
+        # --- PARTIE 3 : Ajout des boutons standards ---
+        self.add_item(Button(label="Annuler", style=discord.ButtonStyle.danger, row=3, custom_id="cancel_btn"))
         self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
-    def create_destination_interface(self, from_square: int, possible_moves: list[int]):
-        self.clear_items(); self.selected_square = from_square
-        move_options = [discord.SelectOption(label=chess.square_name(sq), value=str(sq)) for sq in possible_moves]
-        self.add_item(Dropdown(placeholder="Destination...", options=move_options, custom_id="destination_select"))
-        self.add_item(Button(label="Annuler", style=discord.ButtonStyle.secondary, custom_id="cancel_btn"))
-        self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
+
+            # Dans la classe GameView
+    def create_selection_interface(self):
+            self.clear_items()
+            self.selected_square = None
+            self.ability_piece_type = None
+            self.mind_control_target = None
+
+            # --- NOUVELLE LOGIQUE DE SÉLECTION ---
+            piece_options = []
+            current_turn_color = self.board.turn
+            # On parcourt toutes les pièces sur l'échiquier
+            for square, piece in self.board.piece_map().items():
+                # Si la pièce appartient au joueur dont c'est le tour
+                if piece.color == current_turn_color:
+                    # On vérifie si la pièce a au moins un coup pseudo-légal
+                    # (pour ne pas proposer des pièces complètement bloquées)
+                    if any(move.from_square == square for move in self.board.pseudo_legal_moves):
+                        piece_name_fr = {
+                            chess.PAWN: "Pion", chess.KNIGHT: "Cavalier", chess.BISHOP: "Fou",
+                            chess.ROOK: "Tour", chess.QUEEN: "Dame", chess.KING: "Roi"
+                        }.get(piece.piece_type, "Pièce")
+                        
+                        label = f"{piece_name_fr} en {chess.square_name(square)}"
+                        piece_options.append(discord.SelectOption(label=label, value=str(square)))
+
+            if piece_options:
+                # On crée le nouveau menu déroulant avec un custom_id clair
+                self.add_item(Dropdown(placeholder="Choisissez une pièce à jouer...", options=piece_options, custom_id="piece_select"))
+            
+            self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))    
     def create_double_assault_interface(self, from_square: int, possible_moves: list[int], step: int):
         self.clear_items(); self.selected_square = from_square
         placeholder = "Première destination..." if step == 1 else "Seconde destination..."
@@ -114,7 +151,31 @@ class Dropdown(ui.Select):
             await interaction.response.send_message("Ce n'est pas votre tour de jouer !", ephemeral=True)
             return
         from_square = view.selected_square
-        if self.custom_id == "destination_select":
+        
+        
+        if self.custom_id == "piece_select":
+            selected_square = int(self.values[0])
+            
+            # --- NOUVELLE LOGIQUE SIMPLIFIÉE ---
+            # On appelle notre nouvelle fonction unifiée
+            view.create_action_and_destination_interface(selected_square)
+            
+            # On prépare l'image pour la réponse
+            piece = view.board.piece_at(selected_square)
+            possible_moves = [move.to_square for move in view.board.pseudo_legal_moves if move.from_square == selected_square]
+            if piece.piece_type == chess.PAWN:
+                direction = 8 if piece.color == chess.WHITE else -8
+                back_square = selected_square - direction
+                if 0 <= back_square < 64 and not view.board.piece_at(back_square):
+                    if back_square not in possible_moves: possible_moves.append(back_square)
+
+            selection_color = "#ffcc00aa"; moves_color = "#228B22aa"
+            fill_colors = dict.fromkeys(chess.SquareSet(possible_moves), moves_color)
+            fill_colors[selected_square] = selection_color
+            new_image = await view.generate_board_image(fill=fill_colors)
+
+            await interaction.response.edit_message(content=f"Pièce en **{chess.square_name(selected_square)}** sélectionnée. Choisissez un coup ou une capacité.", attachments=[new_image], view=view)
+        elif self.custom_id == "destination_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move)
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
@@ -224,33 +285,7 @@ class Button(ui.Button):
             await interaction.response.send_message("Ce n'est pas votre tour de jouer !", ephemeral=True)
             return
         square = view.selected_square
-        if self.custom_id == "select_piece_btn":
-            file_val = next((child.values[0] for child in view.children if child.custom_id == "file_select" and child.values), None)
-            rank_val = next((child.values[0] for child in view.children if child.custom_id == "rank_select" and child.values), None)
-            if not file_val or not rank_val: await interaction.response.send_message("Veuillez sélectionner une colonne ET une rangée.", ephemeral=True); return
-            selected_square = chess.square(int(file_val), int(rank_val))
-            piece = view.board.piece_at(selected_square)
-            if piece is None: await interaction.response.send_message("Il n'y a pas de pièce sur cette case.", ephemeral=True); return
-            if piece.color != view.board.turn: await interaction.response.send_message("Ce n'est pas votre pièce.", ephemeral=True); return
-            view.create_action_interface(selected_square)
-            highlight_color = "#ffcc00aa"; highlight_set = chess.SquareSet([selected_square])
-            new_image = await view.generate_board_image(fill=dict.fromkeys(highlight_set, highlight_color))
-            await interaction.response.edit_message(content=f"Pièce en **{chess.square_name(selected_square)}** sélectionnée. Choisissez une action.", attachments=[new_image], view=view)
-        elif self.custom_id == "show_moves_btn":
-            piece = view.board.piece_at(square)
-            possible_moves = [move.to_square for move in view.board.pseudo_legal_moves if move.from_square == square]
-            if piece.piece_type == chess.PAWN:
-                direction = 8 if piece.color == chess.WHITE else -8
-                back_square = square - direction
-                if 0 <= back_square < 64 and not view.board.piece_at(back_square):
-                    if back_square not in possible_moves: possible_moves.append(back_square)
-            if not possible_moves: await interaction.response.send_message("Cette pièce ne peut pas bouger.", ephemeral=True); return
-            view.create_destination_interface(from_square=square, possible_moves=possible_moves)
-            selection_color = "#ffcc00aa"; moves_color = "#228B22aa"
-            fill_colors = dict.fromkeys(chess.SquareSet(possible_moves), moves_color); fill_colors[square] = selection_color
-            new_image = await view.generate_board_image(fill=fill_colors)
-            await interaction.response.edit_message(content=f"Déplacement pour la pièce en **{chess.square_name(square)}**. Choisissez une destination.", attachments=[new_image], view=view)
-        elif self.custom_id == "royal_sweep_btn":
+        if self.custom_id == "royal_sweep_btn":
             neighbor_squares = chess.SquareSet(chess.BB_KING_ATTACKS[square])
             for neighbor_square in neighbor_squares:
                 piece_to_capture = view.board.piece_at(neighbor_square)
