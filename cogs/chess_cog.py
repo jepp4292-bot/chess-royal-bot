@@ -73,14 +73,14 @@ class GameView(ui.View):
                 if piece.color == current_turn_color:
                     # On vérifie si la pièce a au moins un coup pseudo-légal
                     # (pour ne pas proposer des pièces complètement bloquées)
-                    if any(move.from_square == square for move in self.board.pseudo_legal_moves):
-                        piece_name_fr = {
-                            chess.PAWN: "Pion", chess.KNIGHT: "Cavalier", chess.BISHOP: "Fou",
-                            chess.ROOK: "Tour", chess.QUEEN: "Dame", chess.KING: "Roi"
-                        }.get(piece.piece_type, "Pièce")
+                
+                    piece_name_fr = {
+                        chess.PAWN: "Pion", chess.KNIGHT: "Cavalier", chess.BISHOP: "Fou",
+                        chess.ROOK: "Tour", chess.QUEEN: "Dame", chess.KING: "Roi"
+                    }.get(piece.piece_type, "Pièce")
                         
-                        label = f"{piece_name_fr} en {chess.square_name(square)}"
-                        piece_options.append(discord.SelectOption(label=label, value=str(square)))
+                    label = f"{piece_name_fr} en {chess.square_name(square)}"
+                    piece_options.append(discord.SelectOption(label=label, value=str(square)))    
 
             if piece_options:
                 # On crée le nouveau menu déroulant avec un custom_id clair
