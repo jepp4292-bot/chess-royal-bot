@@ -103,6 +103,7 @@ class GameView(ui.View):
         return discord.File(fp=BytesIO(png_board), filename="echiquier.png")
     def disable_all_items(self):
         for item in self.children: item.disabled = True; self.stop()
+        
 
 # --- COMPOSANTS D'INTERFACE ---
 class Dropdown(ui.Select):
@@ -127,6 +128,11 @@ class Dropdown(ui.Select):
         elif self.custom_id == "double_assault_move1_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move); view.board.turn = not view.board.turn
+            if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
+                winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
+                view.disable_all_items(); final_image = await view.generate_board_image()
+                await interaction.response.edit_message(content=f"**Partie terminée ! Le roi a été capturé. Victoire des {winner} !**", attachments=[final_image], view=view)
+                return
             new_from_square = to_square
             possible_moves = [m.to_square for m in view.board.pseudo_legal_moves if m.from_square == new_from_square]
             view.create_double_assault_interface(new_from_square, possible_moves, step=2)
@@ -137,6 +143,11 @@ class Dropdown(ui.Select):
         elif self.custom_id == "double_assault_move2_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move)
+            if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
+                winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
+                view.disable_all_items(); final_image = await view.generate_board_image()
+                await interaction.response.edit_message(content=f"**Partie terminée ! Le roi a été capturé. Victoire des {winner} !**", attachments=[final_image], view=view)
+                return
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
             await interaction.response.edit_message(content=f"Double Assaut terminé ! C'est au tour de {next_player_mention}.", attachments=[new_image], view=view)
@@ -246,6 +257,11 @@ class Button(ui.Button):
                 if piece_to_capture and piece_to_capture.color != view.board.turn:
                     view.board.remove_piece_at(neighbor_square)
             view.board.push(chess.Move.null())
+            if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
+                winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
+                view.disable_all_items(); final_image = await view.generate_board_image()
+                await interaction.response.edit_message(content=f"**Partie terminée ! Le roi a été capturé. Victoire des {winner} !**", attachments=[final_image], view=view)
+                return
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
             await interaction.response.edit_message(content=f"**Balayage Royal !** Pièces adjacentes capturées. C'est au tour de {next_player_mention}.", attachments=[new_image], view=view)
