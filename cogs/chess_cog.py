@@ -25,33 +25,37 @@ class GameView(ui.View):
         self.royal_pawns = set() # Pour stocker les cases (int) des pions royaux
         self.create_selection_interface()
         
-        
     # Dans la classe GameView
-    def create_action_and_destination_interface(self, square: int):
-        self.clear_items()
-        self.selected_square = square
+    def get_all_possible_moves(self, square: int) -> list[int]:
+        """Calcule tous les coups possibles pour une pièce, incluant les règles personnalisées."""
         piece = self.board.piece_at(square)
+        if not piece:
+            return []
 
-        # --- PARTIE 1 : Création du menu des destinations ---
+        # On commence avec les coups de base de la bibliothèque
         possible_moves = [move.to_square for move in self.board.pseudo_legal_moves if move.from_square == square]
         
-        # Logique spéciale pour le déplacement en arrière du pion
+        # On ajoute nos règles personnalisées
         if piece.piece_type == chess.PAWN:
             direction = 8 if piece.color == chess.WHITE else -8
+            
+            # Règle : Reculer d'une case
             back_square = square - direction
             if 0 <= back_square < 64 and not self.board.piece_at(back_square):
                 if back_square not in possible_moves: possible_moves.append(back_square)
                 
+            # Règle : Capacités du Pion Royal
             if square in self.royal_pawns:
-            # 1. Avancer de 3 cases
+                # Avancer de 3 cases
                 one_step = square + direction
                 two_steps = square + (2 * direction)
                 three_steps = square + (3 * direction)
+                # Vérifie que la case existe et que le chemin est libre
                 if 0 <= three_steps < 64 and self.board.piece_at(one_step) is None and self.board.piece_at(two_steps) is None and self.board.piece_at(three_steps) is None:
                     if three_steps not in possible_moves: possible_moves.append(three_steps)
 
-            # 2. Se déplacer sur les diagonales avant (sans capture)
-                file, rank = chess.square_file(square), chess.square_rank(square)
+                # Se déplacer sur les diagonales avant (sans capture)
+                file, _ = chess.square_file(square), chess.square_rank(square)
                 if file > 0: # Diagonale gauche
                     diag_left = square + direction - 1
                     if 0 <= diag_left < 64 and self.board.piece_at(diag_left) is None:
@@ -60,7 +64,16 @@ class GameView(ui.View):
                     diag_right = square + direction + 1
                     if 0 <= diag_right < 64 and self.board.piece_at(diag_right) is None:
                         if diag_right not in possible_moves: possible_moves.append(diag_right)
-    # --- FIN DES MODIFICATIONS ---
+                        
+        return possible_moves
+    # Dans la classe GameView
+    def create_action_and_destination_interface(self, square: int):
+        self.clear_items()
+        self.selected_square = square
+        piece = self.board.piece_at(square)
+
+        # --- PARTIE 1 : Création du menu des destinations ---
+        possible_moves = self.get_all_possible_moves(square)
 
         # On ajoute le menu déroulant seulement s'il y a des coups possibles
         if possible_moves:
@@ -208,6 +221,10 @@ class Dropdown(ui.Select):
             await interaction.response.edit_message(content=f"Pièce en **{chess.square_name(selected_square)}** sélectionnée. Choisissez un coup ou une capacité.", attachments=[new_image], view=view)
         elif self.custom_id == "destination_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
+                        # On met à jour la position du pion royal s'il a bougé
+            if from_square in view.royal_pawns:
+                view.royal_pawns.remove(from_square)
+                view.royal_pawns.add(to_square)
             view.board.push(move)
             if view.board.is_capture(move):
             # Si la case de destination contenait un pion royal, on le retire du set
@@ -238,6 +255,13 @@ class Dropdown(ui.Select):
 
         elif self.custom_id == "double_assault_move1_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
+                        # On met à jour la position du pion royal s'il a bougé
+                        
+                        # On met à jour la position du pion royal s'il a bougé
+            if from_square in view.royal_pawns:
+                view.royal_pawns.remove(from_square)
+                view.royal_pawns.add(to_square)
+
             view.board.push(move); view.board.turn = not view.board.turn
             if view.board.is_capture(move):
             # Si la case de destination contenait un pion royal, on le retire du set
@@ -257,6 +281,10 @@ class Dropdown(ui.Select):
             await interaction.response.edit_message(content=f"Premier coup joué ! Choisissez la seconde destination pour le cavalier en **{chess.square_name(new_from_square)}**.", attachments=[new_image], view=view)
         elif self.custom_id == "double_assault_move2_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
+                        # On met à jour la position du pion royal s'il a bougé
+            if from_square in view.royal_pawns:
+                view.royal_pawns.remove(from_square)
+                view.royal_pawns.add(to_square)
             view.board.push(move)
             if view.board.is_capture(move):
             # Si la case de destination contenait un pion royal, on le retire du set
@@ -314,21 +342,25 @@ class Dropdown(ui.Select):
         elif self.custom_id == "mind_control_target_select":
             target_square = int(self.values[0])
             view.mind_control_target = target_square
-            view.board.turn = not view.board.turn
-            possible_moves = [m for m in view.board.legal_moves if m.from_square == target_square]
-            view.board.turn = not view.board.turn
-            if not possible_moves:
+            destination_squares = view.get_all_possible_moves(target_square)
+
+            if not destination_squares:
                 await interaction.response.send_message("Cette pièce ennemie ne peut effectuer aucun coup légal.", ephemeral=True); return
+            possible_moves_obj = [chess.Move(target_square, dest) for dest in destination_squares]
             destination_options = [discord.SelectOption(label=view.board.san(m), value=m.uci()) for m in possible_moves]
             view.create_mind_control_destination_interface(destination_options)
             selection_color = "#ffcc00aa"; moves_color = "#228B22aa"; target_color = "#ff4500aa"
-            fill_colors = dict.fromkeys([m.to_square for m in possible_moves], moves_color)
+            fill_colors = dict.fromkeys(destination_squares, moves_color)
             fill_colors[from_square] = selection_color; fill_colors[target_square] = target_color
             new_image = await view.generate_board_image(fill=fill_colors)
             await interaction.response.edit_message(content="Pièce ennemie sous contrôle. Quel coup désastreux allez-vous la forcer à jouer ?", attachments=[new_image], view=view)
         elif self.custom_id == "mind_control_destination_select":
             move_uci = self.values[0]
             forced_move = chess.Move.from_uci(move_uci)
+                        # On met à jour la position du pion royal s'il a bougé
+            if from_square in view.royal_pawns:
+                view.royal_pawns.remove(from_square)
+                view.royal_pawns.add(to_square)
             view.board.turn = not view.board.turn; view.board.push(forced_move); view.board.turn = not view.board.turn
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
