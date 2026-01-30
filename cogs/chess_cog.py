@@ -68,7 +68,7 @@ class GameView(ui.View):
             self.add_item(Dropdown(placeholder="Choisissez une destination...", options=move_options, custom_id="destination_select"))
 
         # --- PARTIE 2 : Ajout des boutons de capacité ---
-        if piece.piece_type == chess.KING: self.add_item(Button(label="Promotion Royale 🎖️", style=discord.ButtonStyle.success, custom_id="royal_sweep_btn"))
+        if piece.piece_type == chess.KING: self.add_item(Button(label="Promotion Royale 🎖️", style=discord.ButtonStyle.success, custom_id="royal_promotion_start_btn"))
         elif piece.piece_type == chess.KNIGHT: self.add_item(Button(label="Double Assaut ⚔️", style=discord.ButtonStyle.success, custom_id="double_assault_start_btn"))
         elif piece.piece_type == chess.BISHOP: self.add_item(Button(label="Téléportation ✨", style=discord.ButtonStyle.success, custom_id="teleport_start_btn"))
         elif piece.piece_type == chess.ROOK: self.add_item(Button(label="Équipe de secours 🛡️", style=discord.ButtonStyle.success, custom_id="rescue_team_start_btn"))
