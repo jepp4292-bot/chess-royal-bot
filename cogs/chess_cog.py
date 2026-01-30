@@ -22,6 +22,7 @@ class GameView(ui.View):
         self.selected_square: Optional[int] = None
         self.ability_piece_type: Optional[chess.PieceType] = None
         self.mind_control_target: Optional[int] = None
+        self.royal_pawns = set() # Pour stocker les cases (int) des pions royaux
         self.create_selection_interface()
         
         
@@ -40,6 +41,26 @@ class GameView(ui.View):
             back_square = square - direction
             if 0 <= back_square < 64 and not self.board.piece_at(back_square):
                 if back_square not in possible_moves: possible_moves.append(back_square)
+                
+            if square in self.royal_pawns:
+            # 1. Avancer de 3 cases
+                one_step = square + direction
+                two_steps = square + (2 * direction)
+                three_steps = square + (3 * direction)
+                if 0 <= three_steps < 64 and self.board.piece_at(one_step) is None and self.board.piece_at(two_steps) is None and self.board.piece_at(three_steps) is None:
+                    if three_steps not in possible_moves: possible_moves.append(three_steps)
+
+            # 2. Se déplacer sur les diagonales avant (sans capture)
+                file, rank = chess.square_file(square), chess.square_rank(square)
+                if file > 0: # Diagonale gauche
+                    diag_left = square + direction - 1
+                    if 0 <= diag_left < 64 and self.board.piece_at(diag_left) is None:
+                        if diag_left not in possible_moves: possible_moves.append(diag_left)
+                if file < 7: # Diagonale droite
+                    diag_right = square + direction + 1
+                    if 0 <= diag_right < 64 and self.board.piece_at(diag_right) is None:
+                        if diag_right not in possible_moves: possible_moves.append(diag_right)
+    # --- FIN DES MODIFICATIONS ---
 
         # On ajoute le menu déroulant seulement s'il y a des coups possibles
         if possible_moves:
@@ -47,7 +68,7 @@ class GameView(ui.View):
             self.add_item(Dropdown(placeholder="Choisissez une destination...", options=move_options, custom_id="destination_select"))
 
         # --- PARTIE 2 : Ajout des boutons de capacité ---
-        if piece.piece_type == chess.KING: self.add_item(Button(label="Balayage Royal 👑", style=discord.ButtonStyle.success, custom_id="royal_sweep_btn"))
+        if piece.piece_type == chess.KING: self.add_item(Button(label="Promotion Royale 🎖️", style=discord.ButtonStyle.success, custom_id="royal_sweep_btn"))
         elif piece.piece_type == chess.KNIGHT: self.add_item(Button(label="Double Assaut ⚔️", style=discord.ButtonStyle.success, custom_id="double_assault_start_btn"))
         elif piece.piece_type == chess.BISHOP: self.add_item(Button(label="Téléportation ✨", style=discord.ButtonStyle.success, custom_id="teleport_start_btn"))
         elif piece.piece_type == chess.ROOK: self.add_item(Button(label="Équipe de secours 🛡️", style=discord.ButtonStyle.success, custom_id="rescue_team_start_btn"))
@@ -135,11 +156,26 @@ class GameView(ui.View):
         self.add_item(Button(label="Annuler", style=discord.ButtonStyle.secondary, custom_id="cancel_btn"))
         self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
     async def generate_board_image(self, **kwargs) -> discord.File:
-        svg_board = chess.svg.board(board=self.board, **kwargs)
+        fill_colors = kwargs.pop('fill', {}) # Récupère les couleurs existantes
+    
+    # Ajoute la couleur dorée pour les pions royaux
+        for royal_pawn_square in self.royal_pawns:
+        # On ne surcharge pas une couleur de sélection ou de mouvement
+            if royal_pawn_square not in fill_colors:
+                fill_colors[royal_pawn_square] = "#ffd700aa" # Or avec transparence
+            
+        svg_board = chess.svg.board(board=self.board, fill=fill_colors, **kwargs)
         png_board = cairosvg.svg2png(bytestring=svg_board.encode('utf-8'))
         return discord.File(fp=BytesIO(png_board), filename="echiquier.png")
     def disable_all_items(self):
         for item in self.children: item.disabled = True; self.stop()
+    def create_royal_promotion_target_interface(self, pawn_options: list[discord.SelectOption]):
+        self.clear_items()
+        self.add_item(Dropdown(placeholder="Quel pion anoblir ?", options=pawn_options, custom_id="royal_promotion_target_select"))
+        self.add_item(Button(label="Annuler", style=discord.ButtonStyle.secondary, custom_id="cancel_btn"))
+        self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
+
+
         
 
 # --- COMPOSANTS D'INTERFACE ---
@@ -178,6 +214,10 @@ class Dropdown(ui.Select):
         elif self.custom_id == "destination_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move)
+            if view.board.is_capture(move):
+            # Si la case de destination contenait un pion royal, on le retire du set
+                if move.to_square in view.royal_pawns:
+                    view.royal_pawns.remove(move.to_square)
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
@@ -186,9 +226,28 @@ class Dropdown(ui.Select):
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
             await interaction.response.edit_message(content=f"Coup joué ! C'est au tour de {next_player_mention}.", attachments=[new_image], view=view)
+        elif self.custom_id == "royal_promotion_target_select":
+            pawn_to_promote_square = int(self.values[0])
+        
+            # On ajoute le pion à notre liste de suivi
+            view.royal_pawns.add(pawn_to_promote_square)
+        
+            # On passe le tour
+            view.board.push(chess.Move.null())
+        
+            view.create_selection_interface()
+            # On surligne le nouveau pion royal en or
+            new_image = await view.generate_board_image(fill={pawn_to_promote_square: "#ffd700aa"})
+            next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
+            await interaction.response.edit_message(content=f"Le pion en **{chess.square_name(pawn_to_promote_square)}** est devenu un **Pion Royal** ! Au tour de {next_player_mention}.", attachments=[new_image], view=view)
+
         elif self.custom_id == "double_assault_move1_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move); view.board.turn = not view.board.turn
+            if view.board.is_capture(move):
+            # Si la case de destination contenait un pion royal, on le retire du set
+                if move.to_square in view.royal_pawns:
+                    view.royal_pawns.remove(move.to_square)
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
@@ -204,6 +263,10 @@ class Dropdown(ui.Select):
         elif self.custom_id == "double_assault_move2_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
             view.board.push(move)
+            if view.board.is_capture(move):
+            # Si la case de destination contenait un pion royal, on le retire du set
+                if move.to_square in view.royal_pawns:
+                    view.royal_pawns.remove(move.to_square)
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
@@ -285,21 +348,31 @@ class Button(ui.Button):
             await interaction.response.send_message("Ce n'est pas votre tour de jouer !", ephemeral=True)
             return
         square = view.selected_square
-        if self.custom_id == "royal_sweep_btn":
-            neighbor_squares = chess.SquareSet(chess.BB_KING_ATTACKS[square])
-            for neighbor_square in neighbor_squares:
-                piece_to_capture = view.board.piece_at(neighbor_square)
-                if piece_to_capture and piece_to_capture.color != view.board.turn:
-                    view.board.remove_piece_at(neighbor_square)
-            view.board.push(chess.Move.null())
-            if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
-                winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
-                view.disable_all_items(); final_image = await view.generate_board_image()
-                await interaction.response.edit_message(content=f"**Partie terminée ! Le roi a été capturé. Victoire des {winner} !**", attachments=[final_image], view=view)
+        if self.custom_id == "royal_promotion_start_btn":
+            allied_pawns = []
+            # On cherche tous les pions de la couleur du joueur
+            for pawn_square, pawn_piece in view.board.piece_map().items():
+                if pawn_piece.piece_type == chess.PAWN and pawn_piece.color == view.board.turn:
+                    # On s'assure qu'il n'est pas déjà un pion royal
+                    if pawn_square not in view.royal_pawns:
+                        allied_pawns.append(discord.SelectOption(
+                            label=f"Pion en {chess.square_name(pawn_square)}",
+                            value=str(pawn_square)
+                        ))
+            
+            if not allied_pawns:
+                await interaction.response.send_message("Vous n'avez aucun pion non-royal à promouvoir.", ephemeral=True)
                 return
-            view.create_selection_interface(); new_image = await view.generate_board_image()
-            next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
-            await interaction.response.edit_message(content=f"**Balayage Royal !** Pièces adjacentes capturées. C'est au tour de {next_player_mention}.", attachments=[new_image], view=view)
+
+            view.create_royal_promotion_target_interface(allied_pawns)
+            
+            selection_color = "#ffcc00aa"; target_color = "#ffd700aa" # Gold for pawns
+            fill_colors = {sq.value: target_color for sq in allied_pawns}
+            fill_colors[square] = selection_color
+            new_image = await view.generate_board_image(fill=fill_colors)
+
+            await interaction.response.edit_message(content="**Promotion Royale** : Choisissez un pion à anoblir.", attachments=[new_image], view=view)
+
         elif self.custom_id == "double_assault_start_btn":
             possible_moves = [m.to_square for m in view.board.pseudo_legal_moves if m.from_square == square]
             if not possible_moves: await interaction.response.send_message("Ce cavalier ne peut pas bouger.", ephemeral=True); return
