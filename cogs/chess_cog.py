@@ -77,6 +77,8 @@ class GameView(ui.View):
         # --- PARTIE 3 : Ajout des boutons standards ---
         self.add_item(Button(label="Annuler", style=discord.ButtonStyle.danger, row=3, custom_id="cancel_btn"))
         self.add_item(Button(label="Abandonner", style=discord.ButtonStyle.danger, row=4, custom_id="forfeit_btn"))
+        
+        return possible_moves
 
             # Dans la classe GameView
     def create_selection_interface(self):
@@ -194,16 +196,9 @@ class Dropdown(ui.Select):
             
             # --- NOUVELLE LOGIQUE SIMPLIFIÉE ---
             # On appelle notre nouvelle fonction unifiée
-            view.create_action_and_destination_interface(selected_square)
+            possible_moves = view.create_action_and_destination_interface(selected_square)
             
             # On prépare l'image pour la réponse
-            piece = view.board.piece_at(selected_square)
-            possible_moves = [move.to_square for move in view.board.pseudo_legal_moves if move.from_square == selected_square]
-            if piece.piece_type == chess.PAWN:
-                direction = 8 if piece.color == chess.WHITE else -8
-                back_square = selected_square - direction
-                if 0 <= back_square < 64 and not view.board.piece_at(back_square):
-                    if back_square not in possible_moves: possible_moves.append(back_square)
 
             selection_color = "#ffcc00aa"; moves_color = "#228B22aa"
             fill_colors = dict.fromkeys(chess.SquareSet(possible_moves), moves_color)
