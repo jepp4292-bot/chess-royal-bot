@@ -51,27 +51,35 @@ class GameView(ui.View):
         if not piece:
             return []
 
-        # On commence avec les coups de base de la bibliothèque
+        # On commence avec les coups de base de la bibliothèque (captures, etc.)
         possible_moves = [move.to_square for move in self.board.pseudo_legal_moves if move.from_square == square]
         
         # On ajoute nos règles personnalisées
         if piece.piece_type == chess.PAWN:
             direction = 8 if piece.color == chess.WHITE else -8
             
-            # Règle : Reculer d'une case
+            # Règle : Reculer d'une case (pour tous les pions)
             back_square = square - direction
             if 0 <= back_square < 64 and not self.board.piece_at(back_square):
                 if back_square not in possible_moves: possible_moves.append(back_square)
                 
-            # Règle : Capacités du Pion Royal
+            # --- DÉBUT DE LA CORRECTION POUR LE PION ROYAL ---
             if square in self.royal_pawns:
-                # Avancer de 3 cases
+                # On vérifie les mouvements vers l'avant pas à pas
                 one_step = square + direction
-                two_steps = square + (2 * direction)
-                three_steps = square + (3 * direction)
-                # Vérifie que la case existe et que le chemin est libre
-                if 0 <= three_steps < 64 and self.board.piece_at(one_step) is None and self.board.piece_at(two_steps) is None and self.board.piece_at(three_steps) is None:
-                    if three_steps not in possible_moves: possible_moves.append(three_steps)
+                if 0 <= one_step < 64 and self.board.piece_at(one_step) is None:
+                    # Le pion royal peut toujours avancer d'une case
+                    if one_step not in possible_moves: possible_moves.append(one_step)
+
+                    two_steps = square + (2 * direction)
+                    # S'il peut avancer d'une case, peut-il en avancer de deux ?
+                    if 0 <= two_steps < 64 and self.board.piece_at(two_steps) is None:
+                        if two_steps not in possible_moves: possible_moves.append(two_steps)
+
+                        three_steps = square + (3 * direction)
+                        # S'il peut avancer de deux cases, peut-il en avancer de trois ?
+                        if 0 <= three_steps < 64 and self.board.piece_at(three_steps) is None:
+                            if three_steps not in possible_moves: possible_moves.append(three_steps)
 
                 # Se déplacer sur les diagonales avant (sans capture)
                 file, _ = chess.square_file(square), chess.square_rank(square)
@@ -83,6 +91,7 @@ class GameView(ui.View):
                     diag_right = square + direction + 1
                     if 0 <= diag_right < 64 and self.board.piece_at(diag_right) is None:
                         if diag_right not in possible_moves: possible_moves.append(diag_right)
+            # --- FIN DE LA CORRECTION ---
                         
         return possible_moves
     # Dans la classe GameView
