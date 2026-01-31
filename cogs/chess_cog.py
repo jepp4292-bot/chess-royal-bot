@@ -246,10 +246,6 @@ class Dropdown(ui.Select):
             view._update_royal_pawn_status(move)
             view.board.push(move)
     
-            if view.board.is_capture(move):
-            # Si la case de destination contenait un pion royal, on le retire du set
-                if move.to_square in view.royal_pawns:
-                    view.royal_pawns.remove(move.to_square)
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
@@ -281,10 +277,7 @@ class Dropdown(ui.Select):
         
 
             view.board.push(move); view.board.turn = not view.board.turn
-            if view.board.is_capture(move):
-            # Si la case de destination contenait un pion royal, on le retire du set
-                if move.to_square in view.royal_pawns:
-                    view.royal_pawns.remove(move.to_square)
+            
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
@@ -303,10 +296,7 @@ class Dropdown(ui.Select):
                         
             view._update_royal_pawn_status(move)
             view.board.push(move)
-            if view.board.is_capture(move):
-            # Si la case de destination contenait un pion royal, on le retire du set
-                if move.to_square in view.royal_pawns:
-                    view.royal_pawns.remove(move.to_square)
+        
             if not view.board.king(chess.WHITE) or not view.board.king(chess.BLACK):
                 winner = "Noirs" if not view.board.king(chess.WHITE) else "Blancs"
                 view.disable_all_items(); final_image = await view.generate_board_image()
