@@ -205,6 +205,7 @@ class Dropdown(ui.Select):
         
         
         if self.custom_id == "piece_select":
+            await interaction.response.defer()
             selected_square = int(self.values[0])
             
             # --- NOUVELLE LOGIQUE SIMPLIFIÉE ---
@@ -218,7 +219,7 @@ class Dropdown(ui.Select):
             fill_colors[selected_square] = selection_color
             new_image = await view.generate_board_image(fill=fill_colors)
 
-            await interaction.response.edit_message(content=f"Pièce en **{chess.square_name(selected_square)}** sélectionnée. Choisissez un coup ou une capacité.", attachments=[new_image], view=view)
+            await interaction.edit_original_response(content=f"Pièce en **{chess.square_name(selected_square)}** sélectionnée. Choisissez un coup ou une capacité.", attachments=[new_image], view=view)
         elif self.custom_id == "destination_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
                         # On met à jour la position du pion royal s'il a bougé
@@ -347,7 +348,7 @@ class Dropdown(ui.Select):
             if not destination_squares:
                 await interaction.response.send_message("Cette pièce ennemie ne peut effectuer aucun coup légal.", ephemeral=True); return
             possible_moves_obj = [chess.Move(target_square, dest) for dest in destination_squares]
-            destination_options = [discord.SelectOption(label=view.board.san(m), value=m.uci()) for m in possible_moves]
+            destination_options = [discord.SelectOption(label=view.board.san(m), value=m.uci()) for m in possible_moves_obj]
             view.create_mind_control_destination_interface(destination_options)
             selection_color = "#ffcc00aa"; moves_color = "#228B22aa"; target_color = "#ff4500aa"
             fill_colors = dict.fromkeys(destination_squares, moves_color)
@@ -358,9 +359,9 @@ class Dropdown(ui.Select):
             move_uci = self.values[0]
             forced_move = chess.Move.from_uci(move_uci)
                         # On met à jour la position du pion royal s'il a bougé
-            if from_square in view.royal_pawns:
-                view.royal_pawns.remove(from_square)
-                view.royal_pawns.add(to_square)
+            if forced_move.from_square in view.royal_pawns:
+                view.royal_pawns.remove(forced_move.from_square)
+                view.royal_pawns.add(forced_move.to_square)
             view.board.turn = not view.board.turn; view.board.push(forced_move); view.board.turn = not view.board.turn
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
