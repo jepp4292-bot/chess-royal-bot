@@ -25,6 +25,25 @@ class GameView(ui.View):
         self.royal_pawns = set() # Pour stocker les cases (int) des pions royaux
         self.create_selection_interface()
         
+    # Dans la classe GameView (vous pouvez l'ajouter après la méthode __init__)
+
+    def _update_royal_pawn_status(self, move: chess.Move):
+        """
+        Met à jour le set des pions royaux après un coup.
+        Cette méthode gère correctement les déplacements simples et les captures.
+        """
+        # Étape 1 : On vérifie si une pièce CAPTURÉE était un pion royal.
+        # Cette vérification doit se faire AVANT de mettre à jour le pion qui se déplace.
+        is_capture = self.board.is_capture(move)
+        if is_capture and move.to_square in self.royal_pawns:
+            self.royal_pawns.remove(move.to_square)
+
+        # Étape 2 : On vérifie si la pièce qui SE DÉPLACE est un pion royal et on met à jour sa position.
+        if move.from_square in self.royal_pawns:
+            self.royal_pawns.remove(move.from_square)
+            self.royal_pawns.add(move.to_square)
+
+        
     # Dans la classe GameView
     def get_all_possible_moves(self, square: int) -> list[int]:
         """Calcule tous les coups possibles pour une pièce, incluant les règles personnalisées."""
@@ -223,10 +242,10 @@ class Dropdown(ui.Select):
         elif self.custom_id == "destination_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
                         # On met à jour la position du pion royal s'il a bougé
-            if from_square in view.royal_pawns:
-                view.royal_pawns.remove(from_square)
-                view.royal_pawns.add(to_square)
+                        
+            view._update_royal_pawn_status(move)
             view.board.push(move)
+    
             if view.board.is_capture(move):
             # Si la case de destination contenait un pion royal, on le retire du set
                 if move.to_square in view.royal_pawns:
@@ -256,12 +275,10 @@ class Dropdown(ui.Select):
 
         elif self.custom_id == "double_assault_move1_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
-                        # On met à jour la position du pion royal s'il a bougé
+                
                         
-                        # On met à jour la position du pion royal s'il a bougé
-            if from_square in view.royal_pawns:
-                view.royal_pawns.remove(from_square)
-                view.royal_pawns.add(to_square)
+            view._update_royal_pawn_status(move)
+        
 
             view.board.push(move); view.board.turn = not view.board.turn
             if view.board.is_capture(move):
@@ -283,9 +300,8 @@ class Dropdown(ui.Select):
         elif self.custom_id == "double_assault_move2_select":
             to_square = int(self.values[0]); move = chess.Move(from_square, to_square)
                         # On met à jour la position du pion royal s'il a bougé
-            if from_square in view.royal_pawns:
-                view.royal_pawns.remove(from_square)
-                view.royal_pawns.add(to_square)
+                        
+            view._update_royal_pawn_status(move)
             view.board.push(move)
             if view.board.is_capture(move):
             # Si la case de destination contenait un pion royal, on le retire du set
@@ -390,9 +406,7 @@ class Dropdown(ui.Select):
             move_uci = self.values[0]
             forced_move = chess.Move.from_uci(move_uci)
                         # On met à jour la position du pion royal s'il a bougé
-            if forced_move.from_square in view.royal_pawns:
-                view.royal_pawns.remove(forced_move.from_square)
-                view.royal_pawns.add(forced_move.to_square)
+            view._update_royal_pawn_status(forced_move)
             view.board.turn = not view.board.turn; view.board.push(forced_move); view.board.turn = not view.board.turn
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
