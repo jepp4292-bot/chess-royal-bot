@@ -520,19 +520,32 @@ class ChessCog(commands.Cog):
         except discord.HTTPException:
             pass
     
+    # Dans la classe ChessCog
     @app_commands.command(name="nouvelle_partie", description="Lance une partie d'échecs Royal contre un autre joueur.")
     @app_commands.describe(adversaire="Le joueur que vous souhaitez affronter.")
     async def nouvelle_partie(self, interaction: discord.Interaction, adversaire: discord.Member):
-        await interaction.response.defer()
+        # On ne fait plus de defer() ici. On répond directement.
         if adversaire.bot:
-            await interaction.followup.send("Vous ne pouvez pas affronter un bot.", ephemeral=True)
+            # On envoie une réponse initiale et on s'arrête.
+            await interaction.response.send_message("Vous ne pouvez pas affronter un bot.", ephemeral=True)
             return
         if adversaire == interaction.user:
-            await interaction.followup.send("Vous ne pouvez pas vous affronter vous-même !", ephemeral=True)
+            # Idem ici.
+            await interaction.response.send_message("Vous ne pouvez pas vous affronter vous-même !", ephemeral=True)
             return
 
+        # On crée la vue comme avant.
         view = GameRequestView(initiator=interaction.user, opponent=adversaire, cog=self)
-        message = await interaction.followup.send(f"{adversaire.mention}, vous avez été défié par {interaction.user.mention} à une partie d'échecs Royal ! Acceptez-vous ?", view=view)
+        
+        # On envoie le message de défi comme réponse initiale.
+        await interaction.response.send_message(
+            f"{adversaire.mention}, vous avez été défié par {interaction.user.mention} à une partie d'échecs Royal ! Acceptez-vous ?", 
+            view=view
+        )
+        
+        # TRÈS IMPORTANT : On récupère l'objet Message qu'on vient d'envoyer
+        # pour que la vue puisse le modifier en cas de timeout.
+        message = await interaction.original_response()
         view.message = message
 
 async def setup(bot: commands.Bot):
