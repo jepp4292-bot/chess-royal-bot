@@ -340,21 +340,52 @@ class Dropdown(ui.Select):
             view.create_selection_interface(); new_image = await view.generate_board_image()
             next_player_mention = view.white_player.mention if view.board.turn else view.black_player.mention
             await interaction.response.edit_message(content=f"Équipe de secours réussie ! Un(e) {chess.piece_name(new_piece.piece_type)} est de retour ! Au tour de {next_player_mention}.", attachments=[new_image], view=view)
+        # Dans la classe Dropdown, méthode callback
         elif self.custom_id == "mind_control_target_select":
+            # On diffère la réponse pour éviter les timeouts
+            await interaction.response.defer()
+            
             target_square = int(self.values[0])
             view.mind_control_target = target_square
-            destination_squares = view.get_all_possible_moves(target_square)
 
+            # --- DÉBUT DE LA CORRECTION SÉCURISÉE ---
+
+            # Étape 1 : Calculer les coups possibles de la pièce ennemie
+            # On inverse le tour JUSTE pour le calcul, puis on le restaure immédiatement.
+            view.board.turn = not view.board.turn
+            destination_squares = view.get_all_possible_moves(target_square)
+            view.board.turn = not view.board.turn # Restauration immédiate de l'état correct
+
+            # Si aucun coup n'est possible, on peut s'arrêter ici en toute sécurité.
             if not destination_squares:
-                await interaction.response.send_message("Cette pièce ennemie ne peut effectuer aucun coup légal.", ephemeral=True); return
+                # On utilise edit_original_response car on a "defer" au début
+                await interaction.edit_original_response(content="Cette pièce ennemie ne peut effectuer aucun coup.", view=view)
+                return
+
+            # Étape 2 : Obtenir la notation des coups (ex: "Nf3")
+            # On a besoin de ré-inverser le tour pour que board.san() fonctionne correctement.
             possible_moves_obj = [chess.Move(target_square, dest) for dest in destination_squares]
+            view.board.turn = not view.board.turn
             destination_options = [discord.SelectOption(label=view.board.san(m), value=m.uci()) for m in possible_moves_obj]
+            view.board.turn = not view.board.turn # Restauration immédiate de l'état correct
+
+            # --- FIN DE LA CORRECTION SÉCURISÉE ---
+
+            # À ce point, view.board.turn est GARANTI d'être correct.
+            # Le bouton "Annuler" fonctionnera donc parfaitement.
             view.create_mind_control_destination_interface(destination_options)
+            
+            # On prépare l'image et on envoie la réponse finale
             selection_color = "#ffcc00aa"; moves_color = "#228B22aa"; target_color = "#ff4500aa"
             fill_colors = dict.fromkeys(destination_squares, moves_color)
             fill_colors[from_square] = selection_color; fill_colors[target_square] = target_color
             new_image = await view.generate_board_image(fill=fill_colors)
-            await interaction.response.edit_message(content="Pièce ennemie sous contrôle. Quel coup désastreux allez-vous la forcer à jouer ?", attachments=[new_image], view=view)
+            
+            await interaction.edit_original_response(
+                content="Pièce ennemie sous contrôle. Quel coup désastreux allez-vous la forcer à jouer ?", 
+                attachments=[new_image], 
+                view=view
+            )
         elif self.custom_id == "mind_control_destination_select":
             move_uci = self.values[0]
             forced_move = chess.Move.from_uci(move_uci)
